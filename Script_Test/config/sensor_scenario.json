@@ -1,0 +1,29 @@
+{
+  "_comment": [
+    "URSim Sensor Simulation - Scenario Definition",
+    "",
+    "[Overview]",
+    "  On the real machine, DI0 detects item arrival at the pick station.",
+    "  This file defines simulated behavior for URSim testing.",
+    "",
+    "[Step fields]",
+    "  delay         : Wait time in seconds (number or [min, max] for random)",
+    "  DI0           : Item detect sensor (1=item arrived, 0=no item)",
+    "  wait_register : {\"reg\": N, \"value\": V} Wait until register N equals value V",
+    "  comment       : Note (does not affect execution)",
+    "",
+    "[loop]",
+    "  true  : Repeat the sequence indefinitely",
+    "  false : Execute once and stop"
+  ],
+
+  "sequence": [
+    {"delay": 5.0, "DI0": 1,      "comment": "Item arrived"},
+    {"wait_register": {"reg": 136, "value": 1}, "comment": "Wait for UR to receive params (cycle_ready=1)"},
+    {"wait_register": {"reg": 136, "value": 0}, "comment": "Wait for pick complete (cycle_ready=0)"},
+    {"delay": 0.5, "DI0": 0,      "comment": "Item picked up (DI0 cleared)"},
+    {"delay": [2, 6],              "comment": "Cooldown before next item arrival (random)"}
+  ],
+
+  "loop": true
+}

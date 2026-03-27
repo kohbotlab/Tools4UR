@@ -1,0 +1,18 @@
+{
+    "ursim": {
+        "ip": "127.0.0.1",
+        "port": 30002,
+        "dashboard_port": 29999
+    },
+    "send": {
+        "auto_wrap": true,
+        "wrap_func_name": "main_run",
+        "connect_timeout": 5
+    },
+    "paths": {
+        "program_dir": "../program"
+    },
+    "sensor_registers": {
+        "DI0": 138
+    }
+}

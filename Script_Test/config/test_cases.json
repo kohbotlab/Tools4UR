@@ -1,0 +1,46 @@
+{
+  "_comment": "Test case definitions — register addresses, layouts, and test cases",
+
+  "modbus_port": 502,
+  "total_cycles": 10,
+
+  "control_registers": {
+    "cycle_ready":  {"address": 136, "_comment": "UR sets to 1 when cycle ready (read-only)"},
+    "cycle_count":  {"address": 137, "_comment": "Cycle counter (UR-controlled)"}
+  },
+
+  "timing": {
+    "ready_poll_interval": 0.5,
+    "min_cycle_interval": 7
+  },
+
+  "fixed_registers": {
+    "128": {"name": "pallet_w",  "value": 800},
+    "129": {"name": "pallet_d",  "value": 600},
+    "130": {"name": "item_w",    "value": 200},
+    "131": {"name": "item_d",    "value": 120}
+  },
+
+  "dynamic_registers": {
+    "132": {"name": "offset_x",       "default": 0},
+    "133": {"name": "offset_y",       "default": 0},
+    "134": {"name": "target_pallet",  "default": 0},
+    "135": {"name": "layer_height",   "default": 0}
+  },
+
+  "layouts": {
+    "L1": {
+      "_comment": "Standard layout (non-rotated)",
+      "origin_x": 100,    "origin_y": 150,
+      "spacing_x": 50,    "spacing_y": 80,
+      "layer_step": 80
+    }
+  },
+
+  "test_case": {
+    "desc": "Single pallet, standard layout",
+    "generator": "single_pallet",
+    "layout": "L1",
+    "pallet": 1
+  }
+}

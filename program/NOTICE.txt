@@ -1,0 +1,45 @@
+================================================================
+ NOTICE - simple_pallet_v1.script
+================================================================
+
+PURPOSE / 目的
+  This URScript is intended for development and testing only.
+  It is designed to run on URSim (UR simulator) for validating
+  palletizing logic, register communication, and motion flow.
+
+  本スクリプトは開発・テスト専用です。
+  URSim（URシミュレータ）上でパレタイジングロジック、
+  レジスタ通信、モーションフローを検証するために作成されています。
+
+JOINT POSITIONS / ジョイント値について
+  All joint positions defined in this script are approximate
+  values created for simulation. They do NOT represent safe
+  or valid positions for any specific real robot installation.
+
+  本スクリプト内の全ジョイント値はシミュレーション用の仮値です。
+  特定の実機環境における安全・有効な位置を示すものではありません。
+
+  Before running on a real robot:
+  実機で使用する前に:
+    1. Re-teach ALL joint positions via the teach pendant
+       ティーチペンダントで全ポジションを再教示する
+    2. Verify each motion path is collision-free
+       各動作経路が干渉しないことを確認する
+    3. Test at reduced speed with the teach pendant nearby
+       低速でテストし、ティーチペンダントを手元に用意する
+
+DISCLAIMER / 免責事項
+  This script is provided "as is" without warranty of any kind.
+  The authors are not responsible for any damage, injury, or
+  loss caused by the use of this script.
+
+  本スクリプトは「現状のまま」提供され、いかなる保証もありません。
+  本スクリプトの使用により生じた損害・損失について
+  作成者は一切の責任を負いません。
+
+  Use at your own risk. Always perform a proper risk assessment
+  before deploying robot programs to production equipment.
+
+  自己責任でご使用ください。
+  実機への展開前に必ずリスクアセスメントを実施してください。
+================================================================

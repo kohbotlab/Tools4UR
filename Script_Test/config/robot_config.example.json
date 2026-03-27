@@ -1,0 +1,23 @@
+{
+    "robot": {
+        "ip": "192.168.0.100",
+        "port": 30002,
+        "dashboard_port": 29999
+    },
+    "send": {
+        "auto_wrap": true,
+        "wrap_func_name": "main_run",
+        "connect_timeout": 5
+    },
+    "paths": {
+        "program_dir": "../program",
+        "robot_program_dir": "program"
+    },
+    "ssh": {
+        "user": "root",
+        "password": "YOUR_PASSWORD_HERE",
+        "port": 22,
+        "robot_program_dir": "/programs",
+        "urp_program": "call.urp"
+    }
+}

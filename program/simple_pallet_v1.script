@@ -1,0 +1,215 @@
+def simple_pallet_v1():
+
+  # Robot: UR20
+  # Version: 1.0
+  # Date: 2026-03-12
+
+  # ============================================================
+  # NOTICE / 注意事項
+  # ============================================================
+  # This script is for DEVELOPMENT AND TESTING purposes only.
+  # 本スクリプトは開発・テスト専用です。
+  #
+  # - All joint positions are approximate values for simulation
+  #   (URSim). They MUST be re-taught via the teach pendant
+  #   before running on a real robot.
+  #   全ジョイント値はシミュレーション用の仮値です。
+  #   実機で使用する前にティーチペンダントで再教示してください。
+  #
+  # - Running this script on a real robot without verifying
+  #   positions may cause collisions or damage.
+  #   位置を確認せずに実機で実行すると衝突・破損の恐れがあります。
+  #
+  # - No warranty is provided. Use at your own risk.
+  #   無保証です。自己責任でご使用ください。
+  #
+  # - Always perform a risk assessment before deploying to
+  #   a real robot.
+  #   実機への展開前に必ずリスクアセスメントを実施してください。
+  #
+  # See program/NOTICE.txt for details.
+  # 詳細は program/NOTICE.txt を参照。
+  # ============================================================
+
+  # ============================================================
+  # REGISTER MAP (Modbus TCP port 502)
+  # ============================================================
+  #
+  # All registers are 16-bit unsigned integers (holding registers).
+  # Values in [mm] unless noted. URScript reads/writes via
+  # read_port_register() / write_port_register().
+  #
+  # --- Fixed registers (Python-only, UR does not read) ----------
+  #  128  pallet_w       Pallet width [mm]
+  #  129  pallet_d       Pallet depth [mm]
+  #  130  item_w         Item width [mm]
+  #  131  item_d         Item depth [mm]
+  #
+  # --- Dynamic registers (Python writes each cycle, UR reads) --
+  #  132  offset_x       X offset from pallet reference [mm]
+  #  133  offset_y       Y offset from pallet reference [mm]
+  #  134  target_pallet  Target pallet number (0=not set, !=0 triggers cycle)
+  #  135  layer_height   Layer height [mm]
+  #
+  # --- Control registers (UR writes, Python reads) -------------
+  #  136  cycle_ready    1=UR received params, 0=pick complete
+  #  137  cycle_count    Incremented by UR each pick
+  #
+  # --- Sensor registers (URSim simulation only) ----------------
+  #  138  DI0            Item detect sensor (Python writes for URSim)
+  #
+  # --- Handshake sequence --------------------------------------
+  #  Python: write regs 132-135 -> wait reg136==1 -> verify -> reset
+  #  UR:     wait reg134!=0 -> read regs -> write reg136=1
+  #          -> pick/place -> write reg136=0
+  #
+  # ============================================================
+
+  # --- Tool ---
+  global tcp_offset=p[0, 0, 0, 0, 0, 0]
+  global payload_kg=0
+  global payload_cog=[0, 0, 0]
+  global tool_volt=0
+
+  # --- Positions [rad] ---
+  #
+  # Motion flow:
+  #   home -> pick_lower (Z down) -> pick_above (XY) -> pick_down (grab)
+  #   -> pick_above (rise)
+  #   -> place_rotate (base 60deg) -> place_above (arm reposition)
+  #   -> movel place_approach (lateral to above target, same Z as place_above)
+  #   -> movel place_target (straight down, offset-adjusted)
+  #   -> movel place_approach (straight up)
+  #   -> place_above -> home
+  #
+  global home_joints=[0, -1.571, 1.571, -1.571, -1.571, 0]
+  global pick_lower_j=[0, -1.4, 1.4, -1.571, -1.571, 0]
+  global pick_above_j=[0.2, -1.4, 1.4, -1.571, -1.571, 0]
+  global pick_down_j=[0.2, -1.25, 1.571, -1.892, -1.571, 0]
+  global place_rotate_j=[-0.85, -1.4, 1.4, -1.571, -1.571, 0]
+  global place_above_j=[-0.85, -1.1, 1.6, -2.071, -1.571, 0]
+  # FK of this pose = pallet origin (offset 0,0,0)
+  global place_down_ref=[-0.85, -0.9, 1.8, -2.471, -1.571, 0]
+
+  # --- Motion ---
+  global accel_default=0.5       # [rad/s^2]
+  global vel_default=0.5         # [rad/s]
+  global accel_pick=0.5
+  global vel_pick=0.3
+  global accel_place_l=1.0     # [m/s^2] movel for place approach/descent
+  global vel_place_l=0.5       # [m/s] movel for place approach/descent
+
+  # --- Timing [s] ---
+  global dwell_pick=1.0
+  global dwell_place=1.0
+  global wait_after_place=2.0
+  global wait_before_next=3.0
+
+  # ============================================================
+  # SETUP
+  # ============================================================
+  set_gravity([0.0, 0.0, 9.8])
+  set_tcp(tcp_offset)
+  set_target_payload(payload_kg, payload_cog)
+  if (tool_volt > 0):
+    set_tool_voltage(tool_volt)
+  end
+
+  # Register reset
+  write_port_register(136, 0)    # cycle_ready
+  write_port_register(137, 0)    # cycle_count
+  global cycle_count=0
+
+  # Move to home
+  sleep(0.5)
+  movej(home_joints, a=accel_default, v=vel_default)
+
+  # ============================================================
+  # COMPUTE REFERENCE POSES (forward kinematics)
+  # ============================================================
+  global ref_down  = get_forward_kin(q=place_down_ref)
+  global ref_above = get_forward_kin(q=place_above_j)
+  global ref_down_x  = ref_down[0]
+  global ref_down_y  = ref_down[1]
+  global ref_down_z  = ref_down[2]
+  global ref_down_rx = ref_down[3]
+  global ref_down_ry = ref_down[4]
+  global ref_down_rz = ref_down[5]
+  global ref_above_z = ref_above[2]
+
+  textmsg("[ref] place_down FK x=", ref_down_x)
+  textmsg("[ref] place_down FK y=", ref_down_y)
+  textmsg("[ref] place_down FK z=", ref_down_z)
+  textmsg("[ref] place_above FK z=", ref_above_z)
+
+  # ============================================================
+  # MAIN CYCLE LOOP
+  # ============================================================
+  while (True):
+
+    # --- Wait for item arrival (DI0 = HI) ---
+    while (get_standard_digital_in(0) == False):
+      sync()
+    end
+
+    # --- Wait for Python cycle params (reg134 != 0) ---
+    while (read_port_register(134) == 0):
+      sleep(0.3)
+    end
+
+    # --- Read dynamic parameters ---
+    global offset_x=read_port_register(132) / 1000
+    global offset_y=read_port_register(133) / 1000
+    global layer_h=read_port_register(135) / 1000
+
+    # --- Increment pick counter ---
+    cycle_count = cycle_count + 1
+    write_port_register(137, cycle_count)
+    textmsg("*** cycle count = ", cycle_count)
+
+    # --- Compute place target poses (world-frame offsets) ---
+    place_target_pose = p[ref_down_x + offset_x, ref_down_y + offset_y, ref_down_z + layer_h, ref_down_rx, ref_down_ry, ref_down_rz]
+    place_approach_pose = p[ref_down_x + offset_x, ref_down_y + offset_y, ref_above_z, ref_down_rx, ref_down_ry, ref_down_rz]
+
+    # --- Signal ready to Python ---
+    write_port_register(136, 1)
+
+    textmsg("[cycle] ofsX=", offset_x)
+    textmsg("[cycle] target_x=", ref_down_x + offset_x)
+    textmsg("[cycle] target_y=", ref_down_y + offset_y)
+
+    # --- Pick (Z down first, then XY to pick) ---
+    movej(pick_lower_j, a=accel_default, v=vel_default)
+    movej(pick_above_j, a=accel_default, v=vel_default)
+    movej(pick_down_j, a=accel_pick, v=vel_pick)
+    sleep(dwell_pick)
+    movej(pick_above_j, a=accel_default, v=vel_default)
+
+    # --- Transit to place (base 60deg rotation, then arm reposition) ---
+    movej(place_rotate_j, a=accel_default, v=vel_default)
+    movej(place_above_j, a=accel_default, v=vel_default)
+
+    # --- Place (movel with offset-adjusted positions) ---
+    movel(place_approach_pose, a=accel_place_l, v=vel_place_l)
+    movel(place_target_pose, a=accel_place_l, v=vel_place_l)
+    sleep(dwell_place)
+    movel(place_approach_pose, a=accel_place_l, v=vel_place_l)
+    movej(place_above_j, a=accel_default, v=vel_default)
+
+    # --- Return home ---
+    movej(home_joints, a=accel_default, v=vel_default)
+
+    # --- Signal done ---
+    write_port_register(136, 0)
+
+    # --- Wait for item removal (DI0 = LO) ---
+    while (get_standard_digital_in(0) == True):
+      sync()
+    end
+
+    # --- Cooldown ---
+    sleep(wait_after_place)
+    sleep(wait_before_next)
+
+  end
+end
